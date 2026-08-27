@@ -28,7 +28,7 @@ if __name__ == "__main__":
     parser.add_argument("--framework", required=True, help="Path to the framework")
     parser.add_argument("--profile", required=True, help="Provisioning profile name")
     parser.add_argument("--certificate", required=True, help="Certificate name")
-    parser.add_argument("--bundle_id", required=False, help="New bundle ID")
+    parser.add_argument("--bundle_id", "--bundle-id", "--bundle", required=False, help="New bundle ID", dest="bundle_id")
 
     args = parser.parse_args()
 

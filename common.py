@@ -2,16 +2,36 @@ import os
 import subprocess
 
 def execute_shell_command(cmd):
-    subprocess.run(["sh", "-c", cmd])
+    result = subprocess.run(["sh", "-c", cmd])
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, cmd)
 
 def find_folders_with_extension(root_path, target_extension):
     folders_with_extension = []
+    if not os.path.exists(root_path):
+        return folders_with_extension
 
     for filename in os.listdir(root_path):
         if filename.endswith(target_extension):
             folders_with_extension.append(os.path.join(root_path, filename))
 
     return folders_with_extension
+
+def find_libraries(bundle):
+    libraries = []
+    if not os.path.exists(bundle):
+        return libraries
+
+    for root, dirs, files in os.walk(bundle):
+        # Prevent traversing into .framework and .appex directories
+        for d in list(dirs):
+            if d.endswith(".framework") or d.endswith(".appex"):
+                dirs.remove(d)
+                libraries.append(os.path.join(root, d))
+        for f in files:
+            if f.endswith(".dylib"):
+                libraries.append(os.path.join(root, f))
+    return libraries
 
 def find_app_bundle(working_dir):
     payload_dir = os.path.join(working_dir, "Payload")

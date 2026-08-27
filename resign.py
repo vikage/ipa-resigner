@@ -28,20 +28,25 @@ def rename_bundle_id_for_plug_in(bundle, new_bundle_id, app_original_bundle_id):
         common.execute_shell_command("/usr/libexec/PlistBuddy -c \"Set :CFBundleIdentifier {}\" {}/Info.plist".format(new_plug_in_bundle_id, plug_in))
 
 def resign(bundle, certificate, entitlement):
-    frameworks = common.find_folders_with_extension(os.path.join(bundle, "frameworks"), ".framework")
-    print("Found {} frameworks in {}".format(len(frameworks), os.path.join(bundle, "frameworks")))
-
-    sign_frameworks(bundle, certificate, entitlement)
+    sign_libraries(bundle, certificate)
     sign_plugIns(bundle, certificate, entitlement)
     code_sign([bundle], certificate, entitlement)
 
-def sign_frameworks(bundle, certificate, entitlement):
-    cmd = "/usr/bin/codesign -fs \"{}\" {} --entitlements={}".format(certificate, os.path.join(bundle, "frameworks/*"), entitlement)
-    common.execute_shell_command(cmd)
+def sign_libraries(bundle, certificate):
+    libraries = common.find_libraries(bundle)
+    print("Found {} libraries/frameworks to sign".format(len(libraries)))
+    for library in libraries:
+        print("[INFO] Signing library/framework: {}".format(library))
+        cmd = "/usr/bin/codesign -fs \"{}\" {}".format(certificate, library)
+        common.execute_shell_command(cmd)
 
 def sign_plugIns(bundle, certificate, entitlement):
-    cmd = "/usr/bin/codesign -fs \"{}\" {} --entitlements={}".format(certificate, os.path.join(bundle, "PlugIns/*"), entitlement)
-    common.execute_shell_command(cmd)
+    plugins_dir = os.path.join(bundle, "PlugIns")
+    plugins = common.find_folders_with_extension(plugins_dir, ".appex")
+    for plugin in plugins:
+        print("[INFO] Signing plug-in: {}".format(plugin))
+        cmd = "/usr/bin/codesign -fs \"{}\" {} --entitlements={}".format(certificate, plugin, entitlement)
+        common.execute_shell_command(cmd)
 
 def code_sign(paths, certificate, entitlement):
     for path in paths:
@@ -50,10 +55,22 @@ def code_sign(paths, certificate, entitlement):
         common.execute_shell_command(cmd)
 
 def process_resign(working_dir, profile, certificate, bundle_id):
+    if not os.path.exists(profile):
+        raise FileNotFoundError("[ERROR] Provisioning profile file not found: {}".format(profile))
+    
+    if profile.endswith(".ipa"):
+        raise ValueError("[ERROR] You passed an .ipa file to --profile instead of a valid .mobileprovision file. Please check your command line arguments.")
+
     bundle = common.find_app_bundle(working_dir)
     print("[INFO] Found bundle: {}".format(bundle))
 
-    dump_entitlements(profile, working_dir)
+    try:
+        dump_entitlements(profile, working_dir)
+    except subprocess.CalledProcessError as e:
+        print("[ERROR] Failed to extract entitlements from the provisioning profile.")
+        print("Please check if the profile file is valid and can be decoded using 'security cms'.")
+        raise e
+
     copy_embedded_profile(profile, bundle)
 
     if bundle_id != None:
@@ -74,7 +91,7 @@ if __name__ == "__main__":
     parser.add_argument("--ipa", required=True, help="Path to the IPA payload directory")
     parser.add_argument("--profile", required=True, help="Provisioning profile name")
     parser.add_argument("--certificate", required=True, help="Certificate name")
-    parser.add_argument("--bundle_id", required=False, help="New bundle ID")
+    parser.add_argument("--bundle_id", "--bundle-id", "--bundle", required=False, help="New bundle ID", dest="bundle_id")
 
     args = parser.parse_args()
 
